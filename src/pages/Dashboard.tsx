@@ -1,24 +1,52 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { DownloadCard } from '../components/DownloadCard';
+import { FormatPicker } from '../components/FormatPicker';
 import { Search, Link, ArrowDownToLine, Zap, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
 import { api } from '../lib/api';
 
 export function Dashboard() {
   const { downloads, urlInput, setUrlInput, stats } = useAppStore();
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const [error, setError] = useState('');
 
   const handleAnalyze = async () => {
     if (!urlInput.trim()) return;
     setAnalyzing(true);
+    setError('');
     try {
       const result = await api.analyze(urlInput);
-      console.log('Analysis result:', result);
-      // TODO: Open format picker modal
-    } catch (err) {
+      if (result.formats && result.formats.length > 0) {
+        setAnalysisResult(result);
+        setShowPicker(true);
+      } else {
+        // No formats found — try direct download
+        await api.download({ url: urlInput });
+        setUrlInput('');
+      }
+    } catch (err: any) {
       console.error('Analysis failed:', err);
+      setError(err.message || 'Analysis failed. Check the URL and try again.');
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const handleDownload = async (formatId: string | null, quality: string) => {
+    try {
+      await api.download({
+        url: urlInput,
+        format_id: formatId || undefined,
+        quality: quality,
+      });
+      setShowPicker(false);
+      setAnalysisResult(null);
+      setUrlInput('');
+    } catch (err: any) {
+      console.error('Download start failed:', err);
+      setError(err.message || 'Failed to start download.');
     }
   };
 
@@ -36,7 +64,7 @@ export function Dashboard() {
       </div>
 
       {/* URL Input */}
-      <div className="url-input-container" style={{ marginBottom: 28 }}>
+      <div className="url-input-container" style={{ marginBottom: error ? 8 : 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', color: 'var(--text-tertiary)' }}>
           <Link size={18} />
         </div>
@@ -45,7 +73,7 @@ export function Dashboard() {
           type="text"
           placeholder="Paste a URL — YouTube, Instagram, Torrent, M3U8, or any direct link..."
           value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
+          onChange={(e) => { setUrlInput(e.target.value); setError(''); }}
           onKeyDown={handleKeyDown}
           id="url-input"
         />
@@ -62,6 +90,13 @@ export function Dashboard() {
           )}
         </button>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <div style={{ fontSize: 12, color: 'var(--error)', marginBottom: 20, padding: '8px 12px', background: 'var(--error-subtle)', borderRadius: 'var(--radius-md)' }}>
+          {error}
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid-3" style={{ marginBottom: 28 }}>
@@ -121,6 +156,16 @@ export function Dashboard() {
           <div className="empty-state-title">No active downloads</div>
           <div className="empty-state-text">Paste a URL above to start downloading media from YouTube, Instagram, Telegram, or any supported source.</div>
         </div>
+      )}
+
+      {/* Format Picker Modal */}
+      {showPicker && analysisResult && (
+        <FormatPicker
+          result={analysisResult}
+          url={urlInput}
+          onClose={() => { setShowPicker(false); setAnalysisResult(null); }}
+          onDownload={handleDownload}
+        />
       )}
     </div>
   );

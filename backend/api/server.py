@@ -342,18 +342,111 @@ async def start_download(request: DownloadRequest):
             "status": "queued",
         })
         
-        # TODO: Actually start the download via downloader engine
-        # asyncio.create_task(_run_download(download_id, request))
+        # Start the download in background
+        asyncio.create_task(_run_download(download_id, request))
         
         return {
             "success": True,
             "download_id": download_id,
-            "message": "Download queued",
+            "message": "Download started",
         }
     except Exception as e:
         session.rollback()
         logger.error(f"Failed to start download: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+async def _run_download(download_id: str, request: DownloadRequest) -> None:
+    """Background task that runs the actual download via yt-dlp/aria2c."""
+    session = get_session()
+    try:
+        from backend.core.downloader import download_with_ytdlp, analyze_url as _analyze
+
+        # Update status to analyzing
+        active_downloads[download_id]["status"] = "analyzing"
+        await manager.send_progress(download_id, 0, 0, None, "analyzing")
+
+        dl = session.query(Download).filter_by(download_id=download_id).first()
+        if not dl:
+            return
+
+        # Quick analysis to get title
+        try:
+            info = await _analyze(request.url)
+            dl.title = info.get("title", dl.title)
+            dl.thumbnail_url = info.get("thumbnail", "")
+            dl.uploader = info.get("uploader", "")
+            dl.duration = info.get("duration")
+            active_downloads[download_id]["title"] = dl.title
+            session.commit()
+        except Exception as e:
+            logger.warning(f"Analysis skipped: {e}")
+
+        # Update status to downloading
+        dl.status = DownloadStatus.DOWNLOADING
+        session.commit()
+        active_downloads[download_id]["status"] = "downloading"
+
+        await manager.broadcast({
+            "type": "status_change",
+            "download_id": download_id,
+            "status": "downloading",
+            "title": dl.title,
+            "thumbnail": dl.thumbnail_url or "",
+        })
+
+        # Progress callback for real-time updates
+        async def on_progress(pct: float):
+            active_downloads[download_id]["progress"] = pct
+            await manager.send_progress(
+                download_id, pct, 0, None, "downloading"
+            )
+
+        # Run the download
+        output_path = request.output_path or os.path.expanduser("~/Downloads/DEEP DOWNLOADR")
+        result_path = await download_with_ytdlp(
+            url=request.url,
+            output_path=output_path,
+            format_id=request.format_id,
+            quality=request.quality or "best",
+            embed_metadata=request.embed_metadata,
+            embed_thumbnail=request.embed_thumbnail,
+            progress_callback=on_progress,
+        )
+
+        # Success — update DB
+        dl.status = DownloadStatus.COMPLETED
+        dl.filename = os.path.basename(result_path)
+        dl.output_path = result_path
+        dl.progress = 100.0
+        if os.path.exists(result_path):
+            dl.file_size = os.path.getsize(result_path)
+        dl.completed_at = datetime.now(timezone.utc)
+        session.commit()
+
+        active_downloads[download_id]["status"] = "completed"
+        active_downloads[download_id]["progress"] = 100
+
+        await manager.send_progress(download_id, 100, 0, 0, "completed",
+                                    dl.file_size or 0, dl.file_size or 0)
+        logger.info(f"Download {download_id} completed: {result_path}")
+
+    except Exception as e:
+        logger.error(f"Download {download_id} failed: {e}")
+
+        dl = session.query(Download).filter_by(download_id=download_id).first()
+        if dl:
+            dl.status = DownloadStatus.FAILED
+            dl.error_message = str(e)[:500]
+            session.commit()
+
+        active_downloads[download_id]["status"] = "failed"
+        await manager.broadcast({
+            "type": "download_error",
+            "download_id": download_id,
+            "error": str(e)[:200],
+        })
     finally:
         session.close()
 
