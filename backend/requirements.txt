@@ -1,0 +1,47 @@
+# DEEP DOWNLOADR — Python Backend Dependencies
+# All open-source, zero cost
+
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+websockets>=13.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.14.0
+aiosqlite>=0.20.0
+
+# Download Engines
+yt-dlp>=2024.12.01
+
+# HLS / Streaming
+m3u8>=6.0.0
+aiohttp>=3.10.0
+pycryptodome>=3.21.0
+
+# Torrent
+# python-libtorrent — install via system package manager (python3-libtorrent)
+
+# Telegram
+telethon>=1.37.0
+cryptg>=0.4.0
+
+# Metadata
+mutagen>=1.47.0
+
+# File System
+watchdog>=5.0.0
+
+# Utilities
+psutil>=6.0.0
+httpx>=0.27.0
+feedparser>=6.0.0
+keyring>=25.0.0
+python-dateutil>=2.9.0
+
+# Proxy / Sniffer
+mitmproxy>=11.0.0
+
+# Dev
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
