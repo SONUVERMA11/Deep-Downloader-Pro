@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Deep-Downloader-Pro Banner" width="100%">
+</p>
+
 # DEEP DOWNLOADR ⚡
 
 A professional-grade, all-in-one media downloader and torrent client for macOS and Linux. Built with a native Rust/Tauri frontend and a powerful Python backend.
