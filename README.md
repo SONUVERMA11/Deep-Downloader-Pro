@@ -81,3 +81,8 @@ DEEP DOWNLOADR uses a multi-process architecture:
 ## License
 
 MIT License. See `LICENSE` for details.
+
+
+---
+Made with ❤️ by [Sonu Verma](https://github.com/SONUVERMA11)
+
